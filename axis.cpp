@@ -1,7 +1,7 @@
 #include "axis.h"
 
 
-      Axis::eventLoop(){
+      void Axis::eventLoop(){
             auto next = std::chrono::steady_clock::now(); //Startzeit
             while(running){
                 double dif = pos-sollPos; // Differenz zw. Soll- und Ist-Position
@@ -21,7 +21,8 @@
         
       Axis::Axis(gpiod_chip* chip, unsigned int pinStep,
             unsigned int pinDir, unsigned int pinEn,
-            unsigned int pinEndschalter, int achseLaengeP,
+            unsigned int pinEndschalter, unsigned int pinMs1,
+            unsigned int pinMs2, int achseLaengeP,
             double schrittDistP){
                
          achseLaenge = achseLaengeP;
@@ -34,6 +35,9 @@
          dir_line  = gpiod_chip_get_line(chip, pinDir);
          en_line   = gpiod_chip_get_line(chip, pinEn);
          endschalter_line = gpiod_chip_get_line(chip, pinEndschalter);
+         
+         ms1_line  = gpiod_chip_get_line(chip, pinMs1);
+         ms2_line   = gpiod_chip_get_line(chip, pinMs2);
          
          startThread();
          if (!home()) {
@@ -50,7 +54,7 @@
       bool Axis::startThread(){
             if(running) return true;
          
-            if (!step_line || !dir_line || !en_line) {
+            if (!step_line || !dir_line || !en_line || !ms1_line || !ms2_line) {
                 std::cerr << "Fehler: konnte Motor-GPIO-Lines nicht abrufen\n";
                 return false;
             }
@@ -58,8 +62,15 @@
             gpiod_line_request_output(step_line, "step_motor", 0);
             gpiod_line_request_output(dir_line,  "step_motor", 0);
             gpiod_line_request_output(en_line,   "step_motor", 0);
+            gpiod_line_request_output(ms1_line,  "step_motor", 0);
+            gpiod_line_request_output(ms2_line,   "step_motor", 0);
             
             gpiod_line_set_value(en_line, 0); // Motor aktivieren
+            
+            gpiod_line_set_value(ms1_line, 1); 
+            gpiod_line_set_value(ms2_line, 2); 
+            // Microstep auf 8tel Schritte einstellen
+            
             
             running = true;
             thread = std::thread(&Axis::eventLoop, this);
@@ -73,6 +84,8 @@
             if (step_line) gpiod_line_release(step_line);
             if (dir_line)  gpiod_line_release(dir_line);
             if (en_line)   gpiod_line_release(en_line);
+            if (ms1_line)  gpiod_line_release(ms1_line);
+            if (ms2_line)   gpiod_line_release(ms2_line);
         }
         
         bool Axis::setPos(double newPos){

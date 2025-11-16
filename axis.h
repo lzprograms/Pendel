@@ -19,13 +19,16 @@ private:
     double achseLaenge;             // Gesamtstrecke in mm
     double schrittDist;             // Distanz in mm pro Motorschritt
 
-    const int usDelay1 = 950;       // Zeit für Step-Puls (µs)
-    const int usDelay2 = 550;       // Zeit zwischen Step-Pulsen
+    const int usDelay1 = 75;       // Zeit für Step-Puls (µs)
+    const int usDelay2 = 75;       // Zeit zwischen Step-Pulsen
 
     gpiod_line* step_line;
     gpiod_line* dir_line;
     gpiod_line* en_line;
     gpiod_line* endschalter_line;
+    
+    gpiod_line* ms1_line;
+    gpiod_line* ms2_line;
 
     // --- Interner Steuerloop ---
     void eventLoop();
@@ -37,6 +40,8 @@ public:
          unsigned int pinDir,
          unsigned int pinEn,
          unsigned int pinEndschalter,
+         unsigned int pinMs1,
+         unsigned int pinMs2,
          int achseLaengeP,
          double schrittDistP);
 

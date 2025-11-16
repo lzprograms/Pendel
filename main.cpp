@@ -1,92 +1,144 @@
-#include <gpiod.h>
 #include <iostream>
-#include <chrono>
-#include <thread>
-#include <cmath>
-#include "encoder.h"
-#include "axis.h"
+#include <cstring>
+#include <unistd.h>
+#include <arpa/inet.h>
+#include "pendel.h"
+#include <queue>
 
-//g++ -Wall -std=c++17 -o main main.cpp encoder.cpp axis.cpp -lgpiod -lgpiodcxx -pthread
+bool running;
+Pendel* p;
+int server_fd, client_fd;
 
-
-class Pendel {
-    private:
-        Encoder* encoder;
-        Axis* axis;
-
-        const char* chipname = "gpiochip0"; //Fest für Raspberry Pi 3
-
-        gpiod_chip* chip;
-    
-    public:
-        Pendel(){
-            chip = gpiod_chip_open_by_name(chipname);
-            if (!chip){
-                throw std::runtime_error("GPIO-Chip nicht gefunden");
-            }
-            
-            encoder = new Encoder(chip, 6, 5);
-            axis = new Axis(chip, 17, 27, 23, 4, 450, 0.2);
-        }
-        
-        ~Pendel() { //GPIO-Pins wieder freigeben
-            if (chip)      gpiod_chip_close(chip);
-            
-        }
-        
-        double getWinkelGrad(){
-            return encoder->getWinkelGrad();
-        }
-        double getPos(){
-            return axis->getPos();
-        }
-        int getAchseLaenge(){
-            return axis->getAchseLaenge();
-        }
-        bool setPos(double pos){
-            return axis->setPos(pos);
-        }
-    
+enum class Command {
+    calibrateAngle,
+    calibratePos,
+    calibrateEndPos,
+    setPos,
+    setRelPos,
+    getEndPos,
+    getAngle,
+    getAngleVelocity,
+    unknown
 };
 
-
-
-int main() {
-    Pendel p;
-    const double dt = 0.005; //5ms
-    const double Kp = 10.0, Kd = 0, Kx = 0; // Kx sorgt fürs Zentrieren
-    const double xMin = 0, 
-    xMax = p.getAchseLaenge(), 
-    xMitte = p.getAchseLaenge()*0.5;
-    const double sollWinkel = 180;
-    double letzterWinkel = 0;
-    auto next = std::chrono::steady_clock::now(); //Startzeit
-    for (int i = 0; i < 50000; ++i) {
-        next += std::chrono::microseconds(5000);
-        double winkel = p.getWinkelGrad();
-        double move = 0;
-        if(170 < winkel && winkel < 190){
-            double winkelRate = (winkel - letzterWinkel)/dt;
-            letzterWinkel = winkel;
-
-            double pos = p.getPos();
-            move = Kp * (sollWinkel-winkel) + Kd * winkelRate - Kx * (pos - xMitte);
-
-            pos -= move;
-            if (pos < xMin) pos = xMin;
-            if (pos > xMax) pos = xMax;
-            p.setPos(pos);
-        }
-        
-        if(i%100==0){
-            std::cout << "\rPos: " << p.getPos()
-            << "   Move: " << move 
-            << "   Winkel: " << winkel
-            << "    "
-            << std::flush;
-        }
-        std::this_thread::sleep_until(next);
-    }
-    return 0;
+Command parseCommand(const std::string& cmd) {
+    if (cmd.find("setPos")==0) return Command::setPos;
+    if (cmd.find("calibratePos")==0) return Command::calibratePos;
+    if (cmd.find("setRelPos")==0) return Command::setRelPos;
+    if (cmd.find("getAngle")==0) return Command::getAngle;
+    if (cmd.find("getAngleVelocity")==0) return Command::getAngleVelocity;
+    return Command::unknown;
 }
 
+void handleCommand(const std::string& line) {
+    int a = 0;
+    int b = 0;
+    char delimiter = ' ';
+    std::queue<std::string> parameters;
+    for(int i = 0; i < (int)line.size(); i++){
+	if (line[i] == delimiter){
+	    b = i;
+	    std::string p = line.substr(a, b-a);
+	    parameters.push(p);
+	    a = b+1;
+	}
+    }
+    if (a < (int)line.size()) {
+	parameters.push(line.substr(a));
+    }
+    std::string command = parameters.front();
+    std::string dA; //double Angle (nur falls gebraucht)
+    parameters.pop();
+    std::string response = "ERR";
+    switch (parseCommand(command)){
+	case Command::setPos:
+	    if (!parameters.empty()) {
+		double pos = std::stod(parameters.front());
+		response = p->setPos(pos)?"OK":"ERR limit";
+	    }
+	    break;
+	case Command::setRelPos:
+	    if (!parameters.empty()) {
+		double pos = std::stod(parameters.front());
+		response = p->setRelPos(pos)?"OK":"ERR limit";
+	    }
+	    break;
+	case Command::calibratePos:
+	    p->calibratePos();
+	    break;
+	case Command::getAngle:
+	    response = std::to_string(p->getAngle());
+	    break;
+	case Command::getAngleVelocity:
+	    response = std::to_string(p->getAngle());
+	    response += " ";
+	    dA = std::to_string(p->getAngleVelocity());
+	    response += dA.substr(0, std::min((size_t)6, dA.size()));  //nur max. 6 Stellen
+	    break;
+	default:
+	    response = "ERR unknown";
+	    std::cout << "Client-Befehl nicht bekannt: " << command <<"\n";
+    }
+    response += "\n";
+    send(client_fd, response.c_str(), response.size(), 0);
+}
+
+int main() {
+    p = new Pendel();
+    sockaddr_in server_addr{}, client_addr{};
+    socklen_t client_len = sizeof(client_addr);
+
+    // Socket erstellen
+    server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_fd < 0) {
+        perror("Socket");
+        return 1;
+    }
+    
+    int opt = 1;
+	setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+	//Adresse freigeben
+
+    // Adresse konfigurieren
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_addr.s_addr = INADDR_ANY;  // Alle Interfaces
+    server_addr.sin_port = htons(8080);        // Port 8080
+
+    // Socket binden
+    if (bind(server_fd, (sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+        perror("Bind");
+        return 1;
+    }
+    // Warten auf Verbindung
+    listen(server_fd, 1);
+    std::cout << "Server wartet auf Verbindung...\n";
+
+    client_fd = accept(server_fd, (sockaddr*)&client_addr, &client_len);
+    std::cout << "Client verbunden!\n";
+    std::string message;
+    running = true;
+    char buffer[1024] = {0};
+    message = "";
+    while(running){
+	int bytesRead = read(client_fd, buffer, sizeof(buffer));
+	if (bytesRead <= 0) {
+	    running = false;
+	    break;
+	}
+	message.append(buffer, bytesRead);
+	int newlinePos = message.find('\n');
+	while (newlinePos != -1) {
+	    std::string line = message.substr(0, newlinePos);
+	    message.erase(0, newlinePos + 1);
+	    if (!line.empty()){
+		handleCommand(line);
+		newlinePos = message.find('\n');
+	    }
+	}
+    }
+
+    std::cout << "Client hat Verbindung getrennt! Programm wird beendet!";
+    close(client_fd);
+    close(server_fd);
+    return 0;
+}
