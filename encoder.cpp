@@ -88,7 +88,7 @@ void Encoder::eventLoop() {
 	};	
 	winkel +=table[prev][cur];
 	calculateAngleVelocity();
-	std::cout << winkel <<"\n";
+	//std::cout << winkel <<"\n";
 	//std::cout << prev << cur <<"\n";
 	prevABEdge = newABEdge;
     } 
@@ -96,16 +96,20 @@ void Encoder::eventLoop() {
     void Encoder::calculateAngleVelocity(){
 	int timeApart = timeApartNS(lastEdge.event.ts, eL.event.ts);
 	  if(timeApart > 1000000){
-		  angleVelocity = (winkel-lastWinkel)/timeApart;
+		  double aV = static_cast<double>(winkel-lastWinkel)/timeApart;
+		  //Winkelschritte pro ns in pro Sekunde ändern
+		  aV= aV * 1000000000;
+		  angleVelocity = static_cast<int>(aV);
 		  lastWinkel = winkel;
 		  lastEdge = eL;
+		  std::cout << angleVelocity<< "\n";
 	  } 
     }
     
     int Encoder::getAngle(){
 	    return winkel;
     }
-    double Encoder::getAngleVelocity(){
+    int Encoder::getAngleVelocity(){
 	    return angleVelocity;
     }
     
@@ -138,8 +142,8 @@ void Encoder::eventLoop() {
 	fds[1].events = POLLIN;
 	prevABEdge = {gpiod_line_get_value(a_line)==1?false:true, gpiod_line_get_value(b_line)==1?false:true}; //false=low, true=high, Startzustand festlegen
 	
-	gpiod_line_event_read(a_line, &event);
-	eL.event = event;
+	//gpiod_line_event_read(a_line, &event);
+	//eL.event = event;
 	eL.line = 'A';
 	lastEdge = eL;
 	angleVelocity = 0.0;

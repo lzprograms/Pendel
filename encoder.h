@@ -33,7 +33,7 @@ private:
     EdgeLine eL;
     EdgeLine lastEdge; // für Geschwindigkeit
     int lastWinkel;
-    double angleVelocity;
+    int angleVelocity;
     
     std::queue<EdgeLine> aFlanken;
     std::queue<EdgeLine> bFlanken;
@@ -67,7 +67,7 @@ public:
     // Liefert den aktuellen Winkel in Grad zurück
     int getAngle();
     void calculateAngleVelocity();
-    double getAngleVelocity();
+    int getAngleVelocity();
 };
 
 #endif // ENCODER_H

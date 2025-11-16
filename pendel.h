@@ -21,7 +21,7 @@ public:
 
     double getWinkelGrad() const;  // in Grad
     int getAngle() const; // in Anzahl Drehgeberimpulse
-    double getAngleVelocity() const;
+    int getAngleVelocity() const;
     double getPos() const;      // in mm
     int getPosSchritte() const; // in Motorschritten
     int getAchseLaenge() const;

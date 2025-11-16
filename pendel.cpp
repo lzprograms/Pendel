@@ -27,7 +27,7 @@
             int Pendel::getAngle() const{
                 return encoder->getAngle();
             }
-            double Pendel::getAngleVelocity() const{
+            int Pendel::getAngleVelocity() const{
                 return encoder->getAngleVelocity();
             }
             double Pendel::getPos() const{

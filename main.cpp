@@ -70,10 +70,9 @@ void handleCommand(const std::string& line) {
 	    response = std::to_string(p->getAngle());
 	    break;
 	case Command::getAngleVelocity:
-	    response = std::to_string(p->getAngle());
-	    response += " ";
-	    dA = std::to_string(p->getAngleVelocity());
-	    response += dA.substr(0, std::min((size_t)6, dA.size()));  //nur max. 6 Stellen
+	    //response = std::to_string(p->getAngle());
+	    //response += " ";
+	    response = std::to_string(p->getAngleVelocity());
 	    break;
 	default:
 	    response = "ERR unknown";
