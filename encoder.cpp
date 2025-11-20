@@ -102,7 +102,7 @@ void Encoder::eventLoop() {
 		  angleVelocity = static_cast<int>(aV);
 		  lastWinkel = winkel;
 		  lastEdge = eL;
-		  std::cout << angleVelocity<< "\n";
+		  //std::cout << angleVelocity<< "\n";
 	  } 
     }
     

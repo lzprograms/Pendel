@@ -16,7 +16,7 @@
                 }
                 
                 encoder = new Encoder(chip, 17, 18);
-                axis = new Axis(chip, 23, 24, 22, 4, 20, 21, 4000, 0.2);
+                axis = new Axis(chip, 23, 24, 22, 4, 20, 21, 1300, 0.2);
             }
             
             Pendel::~Pendel() { //GPIO-Pins wieder freigeben

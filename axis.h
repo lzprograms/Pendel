@@ -19,8 +19,8 @@ private:
     double achseLaenge;             // Gesamtstrecke in mm
     double schrittDist;             // Distanz in mm pro Motorschritt
 
-    const int usDelay1 = 75;       // Zeit für Step-Puls (µs)
-    const int usDelay2 = 75;       // Zeit zwischen Step-Pulsen
+    const int usDelay1 = 100;       // Zeit für Step-Puls (µs)
+    const int usDelay2 = 100;       // Zeit zwischen Step-Pulsen
 
     gpiod_line* step_line;
     gpiod_line* dir_line;

@@ -27,6 +27,7 @@ Command parseCommand(const std::string& cmd) {
     if (cmd.find("setRelPos")==0) return Command::setRelPos;
     if (cmd.find("getAngle")==0) return Command::getAngle;
     if (cmd.find("getAngleVelocity")==0) return Command::getAngleVelocity;
+    if (cmd.find("getPos")==0) return Command::getPos;
     return Command::unknown;
 }
 
@@ -73,6 +74,9 @@ void handleCommand(const std::string& line) {
 	    //response = std::to_string(p->getAngle());
 	    //response += " ";
 	    response = std::to_string(p->getAngleVelocity());
+	    break;
+	case Command::getPos:
+	    response = std::to_string(p->getPos());
 	    break;
 	default:
 	    response = "ERR unknown";
