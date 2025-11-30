@@ -23,8 +23,9 @@
                     waitedUs += minUsDelay;
                 }
                 std::this_thread::sleep_until(next);
-                if(tasks.empty())continue; // no tasks? next loop
-                MotorTask &curTask = tasks.front();
+                auto maybeTask = tasks.frontIfExists();
+                if(!maybeTask)continue; // no tasks? next loop
+                MotorTask curTask = *maybeTask;
                 //std::cout << minUsDelay << "\n";
                 int remainingDistance;
                 switch(curTask.state){
@@ -70,6 +71,9 @@
                         maxDecelerate(curTask.arg);
                         if(curSpeed == curTask.arg)tasks.pop();
                         break;
+                    case MotorState::FINISHHOME:
+                        isHoming = false;
+                        tasks.pop();
                     default:
                         break;
                 }
@@ -90,8 +94,7 @@
         }
         
         void Axis::clearQueue(){
-            std::queue<MotorTask> empty;    // clear queue
-            std::swap( tasks, empty );
+            tasks.clear();
         }
         
         int Axis::getDecelDistance(){
@@ -133,11 +136,12 @@
         }
         
         void Axis::stopOnLimit(){
+            if(isHoming)return;
             int dd = getDecelDistance();
             if(pos + dd < endPos && direction > 0) return; 
             if(pos - dd > 0      && direction < 0) return;
             clearQueue();
-            stopAndReverse(0);
+            stopAndReverse(direction);
         }
         
         void Axis::stopAndReverse(int direction){
@@ -200,6 +204,7 @@
          pos = endPos;
          curSpeed = 0;
          direction = -1;
+         isHoming = false;
                
          step_line = gpiod_chip_get_line(chip, pinStep);
          dir_line  = gpiod_chip_get_line(chip, pinDir);
@@ -239,6 +244,12 @@
             gpiod_line_set_value(ms2_line, 1); 
             // Microstep auf 8tel Schritte einstellen
             
+            if (gpiod_line_request_both_edges_events(endschalter_line, "home") < 0) 
+                {
+                std::cerr << "Fehler: konnte Events nicht anfordern\n";
+                return false;
+            }
+            
             
             running = true;
             thread = std::thread(&Axis::eventLoop, this);
@@ -258,22 +269,23 @@
         
         
         bool Axis::home(){ // Schlittenposition ermitteln
-            if (gpiod_line_request_both_edges_events(endschalter_line, "home") < 0) 
-                {
-                std::cerr << "Fehler: konnte Events nicht anfordern\n";
-                return false;
-            }
               // Vorab prüfen: Schlitten schon am Endschalter?
             int val = gpiod_line_get_value(endschalter_line);
             if (val < 0) {
                 std::cerr << "Fehler: konnte Line nicht lesen\n";
                 return false;
             }
+            isHoming = true;
             
             if (val != 0) { // Endschalter nicht schon gedrückt (LOW = aktiv)
                 struct timespec timeout;
                 timeout.tv_sec = 5;    // Timeout wie lange auf Endschaltrer gewartet wird in Sekunden
-                
+                struct gpiod_line_event ev;
+                timespec zero_timeout = {0, 0};
+                while (gpiod_line_event_wait(endschalter_line, &zero_timeout) > 0) {
+                    gpiod_line_event_read(endschalter_line, &ev);
+                    //read all events to empty buffer
+                }
                 setSpeed(-3000);
                 int ret = gpiod_line_event_wait(endschalter_line, &timeout); 
                 if (ret < 0) return false; // Fehler beim Warten auf Flanken (z.B. Line freigegeben)
@@ -284,6 +296,23 @@
             }    
             pos = -100; // end limit switch is 100 steps next to usable area
             setPos(static_cast<int>(endPos * 0.5)); // Schlitten in der Mitte positionieren
+            MotorTask homeTask;
+            homeTask.state = MotorState::FINISHHOME;
+            tasks.push(homeTask);
+            return true;
+        }
+        
+        bool Axis::isCalibrating(){
+            return isHoming;
+        }
+        bool Axis::setMaxSpeed(int stepsPerSecond){
+            if(stepsPerSecond < 1) return false;
+            maxSpeed = stepsPerSecond;
+            return true;
+        }
+        bool Axis::setMaxAcceleration(int stepsPerSecond2){
+            if(stepsPerSecond2 < 1) return false;
+            maxAcceleration = stepsPerSecond2;
             return true;
         }
         

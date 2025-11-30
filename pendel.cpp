@@ -48,6 +48,15 @@
             void Pendel::calibratePos(){
                 axis->home();
             }
+            bool Pendel::isCalibrating(){
+                return axis->isCalibrating();
+            }
+            bool Pendel::setMaxSpeed(int stepsPerSecond){
+                return axis->setMaxSpeed(stepsPerSecond);
+            }
+            bool Pendel::setMaxAcceleration(int stepsPerSecond2){
+                return axis->setMaxAcceleration(stepsPerSecond2);
+            }
             void Pendel::consoleOut() const{
                 std::cout << "\rPos: " << getPos()
                 << "   Winkel: " << getAngle()

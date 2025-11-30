@@ -7,7 +7,7 @@
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
-#include <queue>
+#include "SafeQueue.h"
 
 
 class Axis { 
@@ -17,8 +17,8 @@ private:
         SPEED,              // accelerate until speed is reached
         BRAKEPOS, 
         BRAKESPEED, 
-        HOME, 
-        CHANGEDIRECTION
+        CHANGEDIRECTION,
+        FINISHHOME
         };
     
     struct MotorTask {
@@ -26,11 +26,12 @@ private:
         int arg; // desired Speed or desired Position otherwise 0
     };
     
-    std::queue<MotorTask> tasks;
+    SafeQueue<MotorTask> tasks;
 
 
     bool running;                   // Läuft Thread?
     std::thread thread;             // Thread für Motorposition
+    bool isHoming;
     
     int pos;                // current position in steps
     int endPos;             // total amount of steps from one side to the other
@@ -38,8 +39,8 @@ private:
 
 
     int curSpeed;           // current speed in motor steps per second
-    int maxSpeed = 800000;           // max speed in motor steps per second
-    int maxAcceleration = 100000;    // maximum acceleration in steps/second*second
+    int maxSpeed = 80000;           // max speed in motor steps per second
+    int maxAcceleration = 200000;    // maximum acceleration in steps/second*second
     double inverseMaxSpeed;
     int usDelay;
     int waitedUs;
@@ -82,12 +83,16 @@ public:
 
     // Threadsteuerung
     bool startThread();
+    bool isCalibrating();
     void stopThread();
 
     // Bewegungssteuerung
     bool setPos(int newPos);
     bool setSpeed(int stepsPerSecond);
     bool home();
+    
+    bool setMaxSpeed(int stepsPerSecond);
+    bool setMaxAcceleration(int stepsPerSecond2);
 
     // Getter
     double getEndPos();

@@ -28,6 +28,9 @@ public:
     bool setRelPos(double pos);
     bool setSpeed(int speed);
     void calibratePos();
+    bool isCalibrating();
+    bool setMaxSpeed(int stepsPerSecond);
+    bool setMaxAcceleration(int stepsPerSecond2);
     void consoleOut() const;
 };
 

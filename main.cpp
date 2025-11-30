@@ -20,6 +20,8 @@ enum class Command {
     getAngleVelocity,
     getPos,
     setSpeed,
+    setMaxSpeed,
+    setMaxAcceleration,
     unknown
 };
 //---
@@ -34,6 +36,8 @@ Command parseCommand(const std::string& cmd) {
     if (cmd.find("getAngle")==0) return Command::getAngle;
     if (cmd.find("getPos")==0) return Command::getPos;
     if (cmd.find("setSpeed")==0) return Command::setSpeed;
+    if (cmd.find("setMaxSpeed")==0) return Command::setMaxSpeed;
+    if (cmd.find("setMaxAcceleration")==0) return Command::setMaxAcceleration;
     return Command::unknown;
 }
 
@@ -57,42 +61,67 @@ void handleCommand(const std::string& line) {
     std::string dA; //double Angle (nur falls gebraucht)
     parameters.pop();
     std::string response = "ERR";
-    switch (parseCommand(command)){
-	case Command::setPos:
-	    if (!parameters.empty()) {
-		int pos = std::stoi(parameters.front());
-		response = p->setPos(pos)?"OK":"ERR limit";
-	    }
-	    break;
-	case Command::setRelPos:
-	    if (!parameters.empty()) {
-		int pos = std::stoi(parameters.front());
-		response = p->setRelPos(pos)?"OK":"ERR limit";
-	    }
-	    break;
-	case Command::calibratePos:
-	    p->calibratePos();
-	    break;
-	case Command::getAngle:
-	    response = std::to_string(p->getAngle());
-	    break;
-	case Command::getAngleVelocity:
-	    //response = std::to_string(p->getAngle());
-	    //response += " ";
-	    response = std::to_string(p->getAngleVelocity());
-	    break;
-	case Command::getPos:
-	    response = std::to_string(p->getPos());
-	    break;
-	case Command::setSpeed:
-	    if (!parameters.empty()) {
-		int speed = std::stoi(parameters.front());
-		response = p->setSpeed(speed)?"OK":"ERR limit";
-	    }
-	    break;
-	default:
-	    response = "ERR unknown";
-	    std::cout << "Client-Befehl nicht bekannt: " << command <<"\n";
+    if(p->isCalibrating()){
+	response += " CALIBRATING\n";
+	send(client_fd, response.c_str(), response.size(), 0);
+	return;
+    }
+    try{
+	switch (parseCommand(command)){
+	    case Command::setPos:
+		if (!parameters.empty()) {
+		    int pos = std::stoi(parameters.front());
+		    response = p->setPos(pos)?"OK":"ERR limit";
+		}
+		break;
+	    case Command::setRelPos:
+		if (!parameters.empty()) {
+		    int pos = std::stoi(parameters.front());
+		    response = p->setRelPos(pos)?"OK":"ERR limit";
+		}
+		break;
+	    case Command::calibratePos:
+		p->calibratePos();
+		response = "OK";
+		break;
+	    case Command::getAngle:
+		response = std::to_string(p->getAngle());
+		break;
+	    case Command::getAngleVelocity:
+		//response = std::to_string(p->getAngle());
+		//response += " ";
+		response = std::to_string(p->getAngleVelocity());
+		break;
+	    case Command::getPos:
+		response = std::to_string(p->getPos());
+		break;
+	    case Command::setSpeed:
+		if (!parameters.empty()) {
+		    int speed = std::stoi(parameters.front());
+		    response = p->setSpeed(speed)?"OK":"ERR limit";
+		}
+		break;
+	    case Command::setMaxSpeed:
+		if (!parameters.empty()) {
+		    int speed = std::stoi(parameters.front());
+		    response = p->setMaxSpeed(speed)?"OK":"ERR limit";
+		}
+		break;
+	    case Command::setMaxAcceleration:
+		if (!parameters.empty()) {
+		    int acceleration = std::stoi(parameters.front());
+		    response = p->setMaxAcceleration(acceleration)?"OK":"ERR limit";
+		}
+		break;
+	    default:
+		response = "ERR unknown";
+		std::cout << "Client-Befehl nicht bekannt: " << command <<"\n";
+	}
+    }catch (const std::invalid_argument& e) {
+        response = "ERR parameter";
+    } 
+    catch (const std::out_of_range& e) {
+        response = "ERR parameter";
     }
     response += "\n";
     send(client_fd, response.c_str(), response.size(), 0);
@@ -125,29 +154,38 @@ int main() {
         return 1;
     }
     // Warten auf Verbindung
-    listen(server_fd, 1);
-    std::cout << "Server wartet auf Verbindung...\n";
-
-    client_fd = accept(server_fd, (sockaddr*)&client_addr, &client_len);
-    std::cout << "Client verbunden!\n";
-    std::string message;
     running = true;
-    char buffer[1024] = {0};
-    message = "";
     while(running){
-	int bytesRead = read(client_fd, buffer, sizeof(buffer));
-	if (bytesRead <= 0) {
-	    running = false;
-	    break;
-	}
-	message.append(buffer, bytesRead);
-	int newlinePos = message.find('\n');
-	while (newlinePos != -1) {
-	    std::string line = message.substr(0, newlinePos);
-	    message.erase(0, newlinePos + 1);
-	    if (!line.empty()){
-		handleCommand(line);
-		newlinePos = message.find('\n');
+	listen(server_fd, 1);
+	std::cout << "Server wartet auf Verbindung...\n";
+
+	client_fd = accept(server_fd, (sockaddr*)&client_addr, &client_len);
+	if (client_fd < 0) {
+            perror("Accept");
+            continue; // try again if accept fails
+        }
+	std::cout << "Client verbunden!\n";
+	std::string message;
+	running = true;
+	char buffer[1024] = {0};
+	message = "";
+	bool clientConnected = true;
+	while(clientConnected){
+	    int bytesRead = read(client_fd, buffer, sizeof(buffer));
+	    if (bytesRead <= 0) {
+		clientConnected = false;
+		close(client_fd);
+		break;
+	    }
+	    message.append(buffer, bytesRead);
+	    int newlinePos = message.find('\n');
+	    while (newlinePos != -1) {
+		std::string line = message.substr(0, newlinePos);
+		message.erase(0, newlinePos + 1);
+		if (!line.empty()){
+		    handleCommand(line);
+		    newlinePos = message.find('\n');
+		}
 	    }
 	}
     }
