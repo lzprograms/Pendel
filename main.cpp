@@ -18,16 +18,22 @@ enum class Command {
     getEndPos,
     getAngle,
     getAngleVelocity,
+    getPos,
+    setSpeed,
     unknown
 };
-
+//---
+// String wird umgewandelt in ein Enum Command
+// somit kann das Kommando mit switch geprüft werden
+//---
 Command parseCommand(const std::string& cmd) {
     if (cmd.find("setPos")==0) return Command::setPos;
     if (cmd.find("calibratePos")==0) return Command::calibratePos;
     if (cmd.find("setRelPos")==0) return Command::setRelPos;
-    if (cmd.find("getAngle")==0) return Command::getAngle;
     if (cmd.find("getAngleVelocity")==0) return Command::getAngleVelocity;
+    if (cmd.find("getAngle")==0) return Command::getAngle;
     if (cmd.find("getPos")==0) return Command::getPos;
+    if (cmd.find("setSpeed")==0) return Command::setSpeed;
     return Command::unknown;
 }
 
@@ -54,13 +60,13 @@ void handleCommand(const std::string& line) {
     switch (parseCommand(command)){
 	case Command::setPos:
 	    if (!parameters.empty()) {
-		double pos = std::stod(parameters.front());
+		int pos = std::stoi(parameters.front());
 		response = p->setPos(pos)?"OK":"ERR limit";
 	    }
 	    break;
 	case Command::setRelPos:
 	    if (!parameters.empty()) {
-		double pos = std::stod(parameters.front());
+		int pos = std::stoi(parameters.front());
 		response = p->setRelPos(pos)?"OK":"ERR limit";
 	    }
 	    break;
@@ -77,6 +83,12 @@ void handleCommand(const std::string& line) {
 	    break;
 	case Command::getPos:
 	    response = std::to_string(p->getPos());
+	    break;
+	case Command::setSpeed:
+	    if (!parameters.empty()) {
+		int speed = std::stoi(parameters.front());
+		response = p->setSpeed(speed)?"OK":"ERR limit";
+	    }
 	    break;
 	default:
 	    response = "ERR unknown";

@@ -21,12 +21,12 @@ public:
 
     double getWinkelGrad() const;  // in Grad
     int getAngle() const; // in Anzahl Drehgeberimpulse
+    int getPos() const;      // in mm
     int getAngleVelocity() const;
-    double getPos() const;      // in mm
-    int getPosSchritte() const; // in Motorschritten
-    int getAchseLaenge() const;
+    int getEndPos() const;
     bool setPos(double pos);
     bool setRelPos(double pos);
+    bool setSpeed(int speed);
     void calibratePos();
     void consoleOut() const;
 };

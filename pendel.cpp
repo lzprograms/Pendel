@@ -16,7 +16,7 @@
                 }
                 
                 encoder = new Encoder(chip, 17, 18);
-                axis = new Axis(chip, 23, 24, 22, 4, 20, 21, 1300, 0.2);
+                axis = new Axis(chip, 23, 24, 22, 4, 20, 21, 5500);
             }
             
             Pendel::~Pendel() { //GPIO-Pins wieder freigeben
@@ -30,17 +30,20 @@
             int Pendel::getAngleVelocity() const{
                 return encoder->getAngleVelocity();
             }
-            double Pendel::getPos() const{
+            int Pendel::getPos() const{
                 return axis->getPos();
             }
-            int Pendel::getAchseLaenge() const{
-                return axis->getAchseLaenge();
+            int Pendel::getEndPos() const{
+                return axis->getEndPos();
             }
             bool Pendel::setPos(double pos){
                 return axis->setPos(pos);
             }
             bool Pendel::setRelPos(double pos){
                 return axis->setPos(axis->getPos()+pos);
+            }
+            bool Pendel::setSpeed(int speed){
+                return axis->setSpeed(speed);
             }
             void Pendel::calibratePos(){
                 axis->home();

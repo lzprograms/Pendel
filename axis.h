@@ -7,20 +7,44 @@
 #include <cmath>
 #include <iostream>
 #include <stdexcept>
+#include <queue>
 
 
 class Axis { 
 private:
+    enum class MotorState {
+        POS,                // accelerate in direction of position
+        SPEED,              // accelerate until speed is reached
+        BRAKEPOS, 
+        BRAKESPEED, 
+        HOME, 
+        CHANGEDIRECTION
+        };
+    
+    struct MotorTask {
+        MotorState state;
+        int arg; // desired Speed or desired Position otherwise 0
+    };
+    
+    std::queue<MotorTask> tasks;
+
+
     bool running;                   // Läuft Thread?
     std::thread thread;             // Thread für Motorposition
     
-    double pos;                     // Ist-Position des Schlittens
-    double sollPos;                 // Soll-Position des Schlittens
-    double achseLaenge;             // Gesamtstrecke in mm
-    double schrittDist;             // Distanz in mm pro Motorschritt
+    int pos;                // current position in steps
+    int endPos;             // total amount of steps from one side to the other
+    int direction;          // current direction
 
-    const int usDelay1 = 100;       // Zeit für Step-Puls (µs)
-    const int usDelay2 = 100;       // Zeit zwischen Step-Pulsen
+
+    int curSpeed;           // current speed in motor steps per second
+    int maxSpeed = 35000;           // max speed in motor steps per second
+    int maxAcceleration = 80000;    // maximum acceleration in steps/second*second
+    double inverseMaxSpeed;
+    int usDelay;
+    int waitedUs;
+    int minUsDelay;
+    double accumulatedAcceleration;
 
     gpiod_line* step_line;
     gpiod_line* dir_line;
@@ -30,8 +54,18 @@ private:
     gpiod_line* ms1_line;
     gpiod_line* ms2_line;
 
-    // --- Interner Steuerloop ---
+    // --- internal loop ---
     void eventLoop();
+    
+    void clearQueue();
+    void stopAndReverse(int direction);
+
+    void maxAccelerate(int untilSpeed);
+    void maxDecelerate(int untilSpeed = 0);
+    void decelerateForPos(int remainingDistance);
+    void accelerate(double value);
+    void stopOnLimit();
+    int getDecelDistance();
 
 public:
     // Konstruktor / Destruktor
@@ -42,8 +76,7 @@ public:
          unsigned int pinEndschalter,
          unsigned int pinMs1,
          unsigned int pinMs2,
-         int achseLaengeP,
-         double schrittDistP);
+         int achseLaengeP);
 
     ~Axis();
 
@@ -52,12 +85,13 @@ public:
     void stopThread();
 
     // Bewegungssteuerung
-    bool setPos(double newPos);
+    bool setPos(int newPos);
+    bool setSpeed(int stepsPerSecond);
     bool home();
 
     // Getter
-    double getAchseLaenge();
-    double getPos();
+    double getEndPos();
+    int getPos();
 };
 
 #endif // AXIS_H

@@ -99,7 +99,9 @@ void Encoder::eventLoop() {
 		  double aV = static_cast<double>(winkel-lastWinkel)/timeApart;
 		  //Winkelschritte pro ns in pro Sekunde ändern
 		  aV= aV * 1000000000;
-		  angleVelocity = static_cast<int>(aV);
+		  int aVint = static_cast<int>(aV);
+		  double smooth = 0.8;
+		  angleVelocity = static_cast<int>(aVint * smooth + angleVelocity *(1-smooth));
 		  lastWinkel = winkel;
 		  lastEdge = eL;
 		  //std::cout << angleVelocity<< "\n";
