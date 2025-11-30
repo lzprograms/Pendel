@@ -38,8 +38,8 @@ private:
 
 
     int curSpeed;           // current speed in motor steps per second
-    int maxSpeed = 35000;           // max speed in motor steps per second
-    int maxAcceleration = 80000;    // maximum acceleration in steps/second*second
+    int maxSpeed = 800000;           // max speed in motor steps per second
+    int maxAcceleration = 100000;    // maximum acceleration in steps/second*second
     double inverseMaxSpeed;
     int usDelay;
     int waitedUs;

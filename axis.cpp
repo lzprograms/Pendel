@@ -11,6 +11,7 @@
             curSpeed = 0;
             usDelay = 1e3;
             accumulatedAcceleration = 0;
+            int totalAccelerations = 0;
             
                         
             while(running){
@@ -48,8 +49,9 @@
                         break;
                     case MotorState::SPEED:
                         stopOnLimit();
-                        if(curSpeed == curTask.arg)break;
+                        if(abs(curSpeed) == abs(curTask.arg))break;
                         maxAccelerate(curTask.arg);
+                        totalAccelerations++;
                         break;
                     case MotorState::BRAKEPOS:
                         remainingDistance = std::abs(curTask.arg - pos);
@@ -113,6 +115,7 @@
             a = a * direction * -1;
             accelerate(a);
             
+            
             //std::cout << curSpeed << "\n";
         }
         void Axis::maxDecelerate(int untilSpeed){
@@ -149,6 +152,7 @@
         }
         
         bool Axis::setPos(int newPos){
+            
             if(newPos == pos && curSpeed == 0) return true; 
             // if already stopped at desired position, do nothing
             if(newPos < 0) return false;
@@ -159,7 +163,6 @@
             int desiredDirection = distance>0?1:-1;
             
             if(desiredDirection != direction || getDecelDistance() > std::abs(distance))stopAndReverse(desiredDirection);
-            
             MotorTask positionTask;
             positionTask.arg = newPos;    // set desired position as argument
             positionTask.state = MotorState::POS;
@@ -196,7 +199,7 @@
          
          pos = endPos;
          curSpeed = 0;
-         direction = 0;
+         direction = -1;
                
          step_line = gpiod_chip_get_line(chip, pinStep);
          dir_line  = gpiod_chip_get_line(chip, pinDir);
@@ -279,7 +282,7 @@
                     return false;
                 }             
             }    
-            pos = -10; // Endschalter liegt 10mm neben der verwendbaren Strecke
+            pos = -100; // end limit switch is 100 steps next to usable area
             setPos(static_cast<int>(endPos * 0.5)); // Schlitten in der Mitte positionieren
             return true;
         }
