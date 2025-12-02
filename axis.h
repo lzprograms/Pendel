@@ -39,8 +39,8 @@ private:
 
 
     int curSpeed;           // current speed in motor steps per second
-    int maxSpeed = 80000;           // max speed in motor steps per second
-    int maxAcceleration = 200000;    // maximum acceleration in steps/second*second
+    int maxSpeed = 75000;           // max speed in motor steps per second
+    int maxAcceleration = 100000;    // maximum acceleration in steps/second*second
     double inverseMaxSpeed;
     int usDelay;
     int waitedUs;
@@ -91,12 +91,15 @@ public:
     bool setSpeed(int stepsPerSecond);
     bool home();
     
+    
+    
     bool setMaxSpeed(int stepsPerSecond);
     bool setMaxAcceleration(int stepsPerSecond2);
 
     // Getter
     double getEndPos();
     int getPos();
+    int getSpeed();
 };
 
 #endif // AXIS_H

@@ -15,14 +15,14 @@
             
                         
             while(running){
-                if (usDelay - waitedUs <= minUsDelay){//run atleast every minUsDelay
+                std::this_thread::sleep_until(next);
+                if (usDelay - waitedUs <= 2 * minUsDelay){//run atleast every minUsDelay
                     next += std::chrono::microseconds(usDelay - waitedUs);
                     waitedUs = 0;
                 }else{
                     next += std::chrono::microseconds(minUsDelay);
                     waitedUs += minUsDelay;
                 }
-                std::this_thread::sleep_until(next);
                 auto maybeTask = tasks.frontIfExists();
                 if(!maybeTask)continue; // no tasks? next loop
                 MotorTask curTask = *maybeTask;
@@ -57,6 +57,7 @@
                     case MotorState::BRAKEPOS:
                         remainingDistance = std::abs(curTask.arg - pos);
                         if(remainingDistance == 0){
+                            curSpeed = 0;
                             tasks.pop();
                             break;
                         }
@@ -88,6 +89,7 @@
                 {
                     curStep = curStep == 1? 0: 1;         // set value of gpio-pin (0/1 -> low/high)
                     pos += direction * curStep; // count total number of steps  
+                    std::this_thread::sleep_until(next);
                     gpiod_line_set_value(step_line, curStep);
                 }
             }
@@ -98,7 +100,7 @@
         }
         
         int Axis::getDecelDistance(){
-            return static_cast<int>((curSpeed * curSpeed) / (2 * maxAcceleration));
+            return static_cast<int>((curSpeed * curSpeed) / (2*maxAcceleration));
         }
         void Axis::accelerate(double value){
             accumulatedAcceleration += value;
@@ -113,7 +115,8 @@
             //std::cout << maxAcceleration << " * " << usDelay-waitedUs << " oder " <<  minUsDelay  << " * " << (maxSpeed - std::abs(curSpeed)) << " * " << direction << "\n";
             //std::cout << (maxAcceleration * std::min(usDelay-waitedUs, minUsDelay) * 1e-6 * (maxSpeed - std::abs(curSpeed)) * inverseMaxSpeed * direction * -1)*60 << "\n";
             if(untilSpeed == curSpeed)return;
-            double a = maxAcceleration * std::min(usDelay-waitedUs, minUsDelay) * 1e-6 * (maxSpeed - std::abs(curSpeed)) * inverseMaxSpeed;
+            int usSinceLast = usDelay-waitedUs <= 2* minUsDelay ? usDelay-waitedUs : minUsDelay;
+            double a = maxAcceleration * usSinceLast * 1e-6 * (maxSpeed - std::abs(curSpeed)) * inverseMaxSpeed;
             a = std::min(a, static_cast<double>(abs(untilSpeed) - abs(curSpeed)));
             a = a * direction * -1;
             accelerate(a);
@@ -123,13 +126,15 @@
         }
         void Axis::maxDecelerate(int untilSpeed){
             if(untilSpeed == curSpeed)return;
-            double a = maxAcceleration * std::min(usDelay-waitedUs, minUsDelay) * 1e-6 * (maxSpeed - std::abs(curSpeed)) * inverseMaxSpeed;
+            int usSinceLast = usDelay-waitedUs <= 2* minUsDelay ? usDelay-waitedUs : minUsDelay;
+            double a = maxAcceleration * usSinceLast * 1e-6 * (maxSpeed - std::abs(curSpeed)) * inverseMaxSpeed;
             a = std::min(a, static_cast<double>(abs(curSpeed) - abs(untilSpeed)));
             a = a * direction;
             accelerate(a);
         }
         void Axis::decelerateForPos(int remainingDistance){
-            double a = (curSpeed*curSpeed) / (4.0 * remainingDistance) * std::min((usDelay - waitedUs),minUsDelay) * 1e-6;
+            int usSinceLast = usDelay-waitedUs <= 2* minUsDelay ? usDelay-waitedUs : minUsDelay;
+            double a = (curSpeed*curSpeed) / (4.0 * remainingDistance) * usSinceLast * 1e-6;
             a = std::min(a, static_cast<double>(abs(curSpeed)));
             a = a * direction;
             accelerate(a);
@@ -175,7 +180,7 @@
         }
         
         bool Axis::setSpeed(int stepsPerSecond){
-            if(stepsPerSecond == 0) return false;
+            //if(stepsPerSecond == 0) return false;
             clearQueue();
             int desiredDirection = stepsPerSecond>0?1:-1;
             if(desiredDirection != direction){
@@ -280,14 +285,9 @@
             if (val != 0) { // Endschalter nicht schon gedrückt (LOW = aktiv)
                 struct timespec timeout;
                 timeout.tv_sec = 5;    // Timeout wie lange auf Endschaltrer gewartet wird in Sekunden
-                struct gpiod_line_event ev;
-                timespec zero_timeout = {0, 0};
-                while (gpiod_line_event_wait(endschalter_line, &zero_timeout) > 0) {
-                    gpiod_line_event_read(endschalter_line, &ev);
-                    //read all events to empty buffer
-                }
                 setSpeed(-3000);
                 int ret = gpiod_line_event_wait(endschalter_line, &timeout); 
+                
                 if (ret < 0) return false; // Fehler beim Warten auf Flanken (z.B. Line freigegeben)
                 if (ret == 0){ // timeout/Zeit abgelaufen -> Endschalter kaputt oder Schlitten steckt fest  
                     setSpeed(0);
@@ -322,4 +322,7 @@
         
         int Axis::getPos(){
             return pos;
+        }
+        int Axis::getSpeed(){
+            return curSpeed;
         }

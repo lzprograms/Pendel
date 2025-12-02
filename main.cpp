@@ -41,7 +41,7 @@ Command parseCommand(const std::string& cmd) {
     return Command::unknown;
 }
 
-void handleCommand(const std::string& line) {
+std::string handleCommand(const std::string& line) {
     int a = 0;
     int b = 0;
     char delimiter = ' ';
@@ -64,7 +64,7 @@ void handleCommand(const std::string& line) {
     if(p->isCalibrating()){
 	response += " CALIBRATING\n";
 	send(client_fd, response.c_str(), response.size(), 0);
-	return;
+	return response;
     }
     try{
 	switch (parseCommand(command)){
@@ -124,7 +124,7 @@ void handleCommand(const std::string& line) {
         response = "ERR parameter";
     }
     response += "\n";
-    send(client_fd, response.c_str(), response.size(), 0);
+    return response;
 }
 
 int main() {
@@ -140,23 +140,25 @@ int main() {
     }
     
     int opt = 1;
-	setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
-	//Adresse freigeben
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+	perror("setsockopt(SO_REUSEADDR) fehlgeschlagen");
+	// error
+    }
 
-    // Adresse konfigurieren
+    // configure adress
     server_addr.sin_family = AF_INET;
     server_addr.sin_addr.s_addr = INADDR_ANY;  // Alle Interfaces
     server_addr.sin_port = htons(8080);        // Port 8080
 
-    // Socket binden
+    // bind socket
     if (bind(server_fd, (sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
-        perror("Bind");
-        return 1;
+	perror("Bind");
+	return 1;
     }
-    // Warten auf Verbindung
+    // wait for connection
     running = true;
+    listen(server_fd, 1);
     while(running){
-	listen(server_fd, 1);
 	std::cout << "Server wartet auf Verbindung...\n";
 
 	client_fd = accept(server_fd, (sockaddr*)&client_addr, &client_len);
@@ -179,14 +181,17 @@ int main() {
 	    }
 	    message.append(buffer, bytesRead);
 	    int newlinePos = message.find('\n');
+	    std::string response = "";
 	    while (newlinePos != -1) {
 		std::string line = message.substr(0, newlinePos);
 		message.erase(0, newlinePos + 1);
 		if (!line.empty()){
-		    handleCommand(line);
+		    response += handleCommand(line);
 		    newlinePos = message.find('\n');
 		}
 	    }
+	    send(client_fd, response.c_str(), response.size(), 0);
+	    
 	}
     }
 

@@ -17,6 +17,7 @@
                 
                 encoder = new Encoder(chip, 17, 18);
                 axis = new Axis(chip, 23, 24, 22, 4, 20, 21, 5500);
+                startPlot();
             }
             
             Pendel::~Pendel() { //GPIO-Pins wieder freigeben
@@ -64,5 +65,48 @@
                 << "                   "
                 << std::flush;
             }
+            void Pendel::startPlot(){
+                if(plotRunning) return;
+                thread = std::thread(&Pendel::plotLoop, this);
+                plotRunning = true;
+            }
+            
+            void Pendel::plotLoop() const{
+                auto next = std::chrono::steady_clock::now(); //start time
+                FILE* gp = popen("gnuplot -persistent", "w");
+                
+                fprintf(gp, "set terminal x11\n");  // oder 'x11'
+                std::deque<std::pair<int,int>> buffer;  // ring buffer for values
+                int t = 0;
+                while (plotRunning) {
+                    // send value in real time to gnu
+                    int time = t*50;
+                    //buffer.push_back({time, encoder->getAngle()});
+                    buffer.push_back({time, encoder->getAngle()});
+                    if(buffer.size() > 1000)
+                        buffer.pop_front();  // delete oldest values
+                    
+                    if(t% 100 == 99){
+                        fprintf(gp, "set xlabel 't [ms]'\n");
+                        fprintf(gp, "set ylabel 'Angle [deg]'\n");
+                        fprintf(gp, "set yrange [1100:1300]\n");
+                        fprintf(gp, "plot '-' with lines title 'Pendulum Angle'\n");
+                        for(auto& p : buffer)
+                            fprintf(gp, "%d %d\n", p.first, p.second);
+                        fprintf(gp, "e\n");
+                        fflush(gp);
+                    }
+
+                    t++;
+                    next += std::chrono::microseconds(50000); // 50 ms
+                    std::this_thread::sleep_until(next);
+                }
+
+                // end
+                fprintf(gp, "e\n");
+                fflush(gp);
+                pclose(gp);
+        }
+            
 
 

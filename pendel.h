@@ -14,6 +14,8 @@ private:
     Axis* axis;
     const char* chipname = "gpiochip0"; // Fest für Raspberry Pi 3
     gpiod_chip* chip;
+    bool plotRunning;
+        std::thread thread;             // Thread for plot stream
 
 public:
     Pendel();
@@ -32,6 +34,8 @@ public:
     bool setMaxSpeed(int stepsPerSecond);
     bool setMaxAcceleration(int stepsPerSecond2);
     void consoleOut() const;
+    void plotLoop() const;
+    void startPlot();
 };
 
 #endif // PENDEL_H
