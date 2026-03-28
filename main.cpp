@@ -19,7 +19,9 @@ enum class Command {
     getAngle,
     getAngleVelocity,
     getPos,
+    getSpeed,
     setSpeed,
+    setAcceleration,
     setMaxSpeed,
     setMaxAcceleration,
     unknown
@@ -35,7 +37,9 @@ Command parseCommand(const std::string& cmd) {
     if (cmd.find("getAngleVelocity")==0) return Command::getAngleVelocity;
     if (cmd.find("getAngle")==0) return Command::getAngle;
     if (cmd.find("getPos")==0) return Command::getPos;
+    if (cmd.find("getSpeed")==0) return Command::getSpeed;
     if (cmd.find("setSpeed")==0) return Command::setSpeed;
+    if (cmd.find("setAcceleration")==0) return Command::setAcceleration;
     if (cmd.find("setMaxSpeed")==0) return Command::setMaxSpeed;
     if (cmd.find("setMaxAcceleration")==0) return Command::setMaxAcceleration;
     return Command::unknown;
@@ -95,10 +99,19 @@ std::string handleCommand(const std::string& line) {
 	    case Command::getPos:
 		response = std::to_string(p->getPos());
 		break;
+	    case Command::getSpeed:
+		response = std::to_string(p->getSpeed());
+		break;
 	    case Command::setSpeed:
 		if (!parameters.empty()) {
 		    int speed = std::stoi(parameters.front());
 		    response = p->setSpeed(speed)?"OK":"ERR limit";
+		}
+		break;
+	    case Command::setAcceleration:
+		if (!parameters.empty()) {
+		    int accel = std::stoi(parameters.front());
+		    response = p->setAcceleration(accel)?"OK":"ERR limit";
 		}
 		break;
 	    case Command::setMaxSpeed:

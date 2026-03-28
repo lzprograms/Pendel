@@ -13,8 +13,9 @@
 class Axis { 
 private:
     enum class MotorState {
-        POS,                // accelerate in direction of position
+        POS,                // go to position as fast as possible
         SPEED,              // accelerate until speed is reached
+        ACCELERATE,         // accelerate
         BRAKEPOS, 
         BRAKESPEED, 
         CHANGEDIRECTION,
@@ -28,7 +29,6 @@ private:
     
     SafeQueue<MotorTask> tasks;
 
-
     bool running;                   // Läuft Thread?
     std::thread thread;             // Thread für Motorposition
     bool isHoming;
@@ -39,8 +39,8 @@ private:
 
 
     int curSpeed;           // current speed in motor steps per second
-    int maxSpeed = 75000;           // max speed in motor steps per second
-    int maxAcceleration = 100000;    // maximum acceleration in steps/second*second
+    int maxSpeed = 120000;           // max speed in motor steps per second
+    int maxAcceleration = 120000;    // maximum acceleration in steps/second*second
     double inverseMaxSpeed;
     int usDelay;
     int waitedUs;
@@ -89,6 +89,7 @@ public:
     // Bewegungssteuerung
     bool setPos(int newPos);
     bool setSpeed(int stepsPerSecond);
+    bool setAcceleration(int stepsPerSecond);
     bool home();
     
     

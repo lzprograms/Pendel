@@ -11,11 +11,17 @@
             curSpeed = 0;
             usDelay = 1e3;
             accumulatedAcceleration = 0;
-            int totalAccelerations = 0;
-            
                         
             while(running){
                 std::this_thread::sleep_until(next);
+                long timeDeviationUs = std::chrono::duration_cast<std::chrono::microseconds>(
+                    std::chrono::steady_clock::now() - next
+                ).count(); // time between actual step time and wanted step time
+                // if jitter occurs due to high cpu load, reset timing
+                if (std::abs(timeDeviationUs) > 500) {
+                    next = std::chrono::steady_clock::now() + std::chrono::microseconds(minUsDelay);
+                }
+                
                 if (usDelay - waitedUs <= 2 * minUsDelay){//run atleast every minUsDelay
                     next += std::chrono::microseconds(usDelay - waitedUs);
                     waitedUs = 0;
@@ -52,8 +58,26 @@
                         stopOnLimit();
                         if(abs(curSpeed) == abs(curTask.arg))break;
                         maxAccelerate(curTask.arg);
-                        totalAccelerations++;
                         break;
+                    case MotorState::ACCELERATE:
+                    {
+                        stopOnLimit();
+                        int usSinceLast = usDelay-waitedUs <= 2* minUsDelay ? usDelay-waitedUs : minUsDelay;
+                        double maxA = maxAcceleration * usSinceLast * 1e-6 * (maxSpeed - std::abs(curSpeed)) * inverseMaxSpeed;
+                        double setA = curTask.arg * usSinceLast * 1e-6;
+                        if(setA < -maxA) setA = -maxA;  //cap at maximum allowed Acceleration
+                        if(setA > maxA) setA = maxA; 
+                        accelerate(setA);
+                        if(curSpeed < 0 && direction != 1){
+                                direction = 1;
+                                gpiod_line_set_value(dir_line, 1);    
+                            };
+                        if(curSpeed > 0 && direction != -1){
+                             direction = -1;
+                             gpiod_line_set_value(dir_line, 0);    
+                         }
+                        break;
+                     }   
                     case MotorState::BRAKEPOS:
                         remainingDistance = std::abs(curTask.arg - pos);
                         if(remainingDistance == 0){
@@ -62,11 +86,6 @@
                             break;
                         }
                         decelerateForPos(remainingDistance);
-                        //needed deceleration to stop at desired position, 
-                        //formula normally is 2.0 * remainingDistance but pos is only counted every second loop
-                        //only on positive steps on gpio pin
-                        
-                        //std::cout << curSpeed << ": " << curSpeed*curSpeed <<  " / " <<  (2.0 * remainingDistance)  << " * " << ((usDelay -waitedUs)* 1e-6)<< "\n";
                         break;
                     case MotorState::BRAKESPEED:
                         maxDecelerate(curTask.arg);
@@ -75,6 +94,7 @@
                     case MotorState::FINISHHOME:
                         isHoming = false;
                         tasks.pop();
+                        break;
                     default:
                         break;
                 }
@@ -82,10 +102,11 @@
                 usDelay = std::max(static_cast<int>(1e6/std::abs(curSpeed)), minUsDelay);
                 if(waitedUs != 0) continue; // only step on usDelay, not every loop
                 if( // only step on these Motorstates
-                    curTask.state == MotorState::POS 
+                   curTask.state == MotorState::POS 
                 || curTask.state == MotorState::SPEED 
-                || curTask.state ==  MotorState::BRAKEPOS 
-                || curTask.state ==  MotorState::BRAKESPEED)
+                || curTask.state == MotorState::BRAKEPOS 
+                || curTask.state == MotorState::BRAKESPEED
+                || curTask.state == MotorState::ACCELERATE)
                 {
                     curStep = curStep == 1? 0: 1;         // set value of gpio-pin (0/1 -> low/high)
                     pos += direction * curStep; // count total number of steps  
@@ -143,10 +164,11 @@
         void Axis::stopOnLimit(){
             if(isHoming)return;
             int dd = getDecelDistance();
-            if(pos + dd < endPos && direction > 0) return; 
-            if(pos - dd > 0      && direction < 0) return;
-            clearQueue();
-            stopAndReverse(direction);
+            if(curSpeed == 0) return; 
+            if((pos + dd > endPos && curSpeed < 0 )||( pos - dd < 0      && curSpeed > 0)){
+                clearQueue();
+                stopAndReverse(direction);
+            }
         }
         
         void Axis::stopAndReverse(int direction){
@@ -195,6 +217,23 @@
             speedTask.arg = stepsPerSecond;    // set desired position as argument
             speedTask.state = MotorState::SPEED;
             tasks.push(speedTask);
+            return true;
+        }
+        bool Axis::setAcceleration(int stepsPerSecond){
+            clearQueue();
+            if(curSpeed == 0){
+                if(stepsPerSecond > 0){
+                    direction = -1;
+                    gpiod_line_set_value(dir_line, 0);    
+                }else{
+                    direction = 1;
+                    gpiod_line_set_value(dir_line, 1);  
+                }
+            }
+            MotorTask accelerateTask;
+            accelerateTask.arg = stepsPerSecond;    // set desired position as argument
+            accelerateTask.state = MotorState::ACCELERATE;
+            tasks.push(accelerateTask);
             return true;
         }
 
@@ -286,15 +325,18 @@
                 struct timespec timeout;
                 timeout.tv_sec = 5;    // Timeout wie lange auf Endschaltrer gewartet wird in Sekunden
                 setSpeed(-3000);
-                int ret = gpiod_line_event_wait(endschalter_line, &timeout); 
                 
-                if (ret < 0) return false; // Fehler beim Warten auf Flanken (z.B. Line freigegeben)
-                if (ret == 0){ // timeout/Zeit abgelaufen -> Endschalter kaputt oder Schlitten steckt fest  
+                int ret = gpiod_line_event_wait(endschalter_line, &timeout); 
+                gpiod_line_event event; 
+                
+                // ret = -1 Fehler beim Warten auf Flanken (z.B. Line freigegeben)
+                if (ret <= 0){ // ret = 0 timeout/Zeit abgelaufen -> Endschalter kaputt oder Schlitten steckt fest  
                     setSpeed(0);
                     return false;
                 }             
+                gpiod_line_event_read(endschalter_line, &event);
             }    
-            pos = -100; // end limit switch is 100 steps next to usable area
+            pos = -200; // end limit switch is 100 steps next to usable area
             setPos(static_cast<int>(endPos * 0.5)); // Schlitten in der Mitte positionieren
             MotorTask homeTask;
             homeTask.state = MotorState::FINISHHOME;

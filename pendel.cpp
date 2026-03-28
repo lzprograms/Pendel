@@ -34,6 +34,9 @@
             int Pendel::getPos() const{
                 return axis->getPos();
             }
+            int Pendel::getSpeed() const{
+                return axis->getSpeed();
+            }
             int Pendel::getEndPos() const{
                 return axis->getEndPos();
             }
@@ -45,6 +48,9 @@
             }
             bool Pendel::setSpeed(int speed){
                 return axis->setSpeed(speed);
+            }
+            bool Pendel::setAcceleration(int acceleration){
+                return axis->setAcceleration(acceleration);
             }
             void Pendel::calibratePos(){
                 axis->home();
@@ -89,7 +95,7 @@
                     if(t% 100 == 99){
                         fprintf(gp, "set xlabel 't [ms]'\n");
                         fprintf(gp, "set ylabel 'Angle [deg]'\n");
-                        fprintf(gp, "set yrange [1100:1300]\n");
+                        fprintf(gp, "set yrange [-1200:4000]\n");
                         fprintf(gp, "plot '-' with lines title 'Pendulum Angle'\n");
                         for(auto& p : buffer)
                             fprintf(gp, "%d %d\n", p.first, p.second);

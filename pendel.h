@@ -24,11 +24,13 @@ public:
     double getWinkelGrad() const;  // in Grad
     int getAngle() const; // in Anzahl Drehgeberimpulse
     int getPos() const;      // in mm
+    int getSpeed() const;
     int getAngleVelocity() const;
     int getEndPos() const;
     bool setPos(double pos);
     bool setRelPos(double pos);
     bool setSpeed(int speed);
+    bool setAcceleration(int acceleration);
     void calibratePos();
     bool isCalibrating();
     bool setMaxSpeed(int stepsPerSecond);
