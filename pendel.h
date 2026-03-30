@@ -12,7 +12,7 @@ class Pendel {
 private:
     Encoder* encoder;
     Axis* axis;
-    const char* chipname = "gpiochip0"; // Fest für Raspberry Pi 3
+    const char* chipname = "gpiochip0"; // Fest fÃ¼r Raspberry Pi 3
     gpiod_chip* chip;
     bool plotRunning;
         std::thread thread;             // Thread for plot stream
