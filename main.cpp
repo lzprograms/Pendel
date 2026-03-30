@@ -28,7 +28,7 @@ enum class Command {
 };
 //---
 // String wird umgewandelt in ein Enum Command
-// somit kann das Kommando mit switch geprüft werden
+// somit kann das Kommando mit switch geprÃ¼ft werden
 //---
 Command parseCommand(const std::string& cmd) {
     if (cmd.find("setPos")==0) return Command::setPos;
@@ -37,6 +37,7 @@ Command parseCommand(const std::string& cmd) {
     if (cmd.find("getAngleVelocity")==0) return Command::getAngleVelocity;
     if (cmd.find("getAngle")==0) return Command::getAngle;
     if (cmd.find("getPos")==0) return Command::getPos;
+    if (cmd.find("getEndPos")==0) return Command::getEndPos;
     if (cmd.find("getSpeed")==0) return Command::getSpeed;
     if (cmd.find("setSpeed")==0) return Command::setSpeed;
     if (cmd.find("setAcceleration")==0) return Command::setAcceleration;
@@ -92,12 +93,13 @@ std::string handleCommand(const std::string& line) {
 		response = std::to_string(p->getAngle());
 		break;
 	    case Command::getAngleVelocity:
-		//response = std::to_string(p->getAngle());
-		//response += " ";
 		response = std::to_string(p->getAngleVelocity());
 		break;
 	    case Command::getPos:
 		response = std::to_string(p->getPos());
+		break;
+	    case Command::getEndPos:
+		response = std::to_string(p->getEndPos());
 		break;
 	    case Command::getSpeed:
 		response = std::to_string(p->getSpeed());
