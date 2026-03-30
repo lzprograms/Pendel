@@ -12,7 +12,7 @@ class Pendel {
 private:
     Encoder* encoder;
     Axis* axis;
-    const char* chipname = "gpiochip0"; // Fest fÃ¼r Raspberry Pi 3
+    const char* chipname = "gpiochip4"; // set for Raspberry Pi 4 B+
     gpiod_chip* chip;
     bool plotRunning;
         std::thread thread;             // Thread for plot stream
@@ -21,7 +21,6 @@ public:
     Pendel();
     ~Pendel();
 
-    double getWinkelGrad() const;  // in Grad
     int getAngle() const; // in Anzahl Drehgeberimpulse
     int getPos() const;      // in mm
     int getSpeed() const;
