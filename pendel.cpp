@@ -15,8 +15,8 @@
                     throw std::runtime_error("GPIO-Chip nicht gefunden");
                 }
                 
-                encoder = new Encoder(chip, 17, 18);
-                axis = new Axis(chip, 23, 24, 22, 4, 20, 21, 5500);
+                encoder = new Encoder(chip, 10, 19);
+                axis = new Axis(chip, 27, 22, 24, 2, 9, 20, 21);
                 startPlot();
             }
             
@@ -35,7 +35,7 @@
                 return axis->getPos();
             }
             int Pendel::getSpeed() const{
-                return axis->getSpeed();
+                return axis->getSpeed() * -1.0;
             }
             int Pendel::getEndPos() const{
                 return axis->getEndPos();
@@ -50,7 +50,7 @@
                 return axis->setSpeed(speed);
             }
             bool Pendel::setAcceleration(int acceleration){
-                return axis->setAcceleration(acceleration);
+                return axis->setAcceleration(acceleration * -1.0);
             }
             void Pendel::calibratePos(){
                 axis->home();
