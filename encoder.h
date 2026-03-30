@@ -9,9 +9,9 @@
 #include <poll.h>
 #include <queue>
 
-struct EdgeLine {
-    char line;			 //Flanke 'A' oder 'B'
-    gpiod_line_event event;      // Original-Event
+struct EdgeLine {				// help struct
+    char line;			 		// edge 'A' oder 'B'
+    gpiod_line_event event;     // original Event
 };
 
 bool isEarlier(const timespec &a, const timespec &b);//Hilfsfunktion
@@ -19,11 +19,10 @@ int timeApartNS(const timespec &a, const timespec &b);
 
 class Encoder {
 private:
-    int winkel;                    // Aktueller Winkel in Sensorschritten
-    int winkelSchritte;            // Anzahl der Schritte pro Umdrehung
+    int winkel;                    // current angle in counted flanks
 
-    bool running;                  // Läuft der Thread?
-    std::thread thread;            // Thread zur Winkelüberwachung
+    bool running;                  // is the thread running?
+    std::thread thread;            // thread for monitoring angle
 
     gpiod_line* a_line;            // Phase A
     gpiod_line* b_line;            // Phase B
@@ -40,21 +39,19 @@ private:
     
     
     
-    std::vector<bool> prevABEdge; //vorherige Edge von A und B
+    std::vector<bool> prevABEdge; //last edge from a or b
 
-    // Thread-Funktion zur Ereignisüberwachung
+    // thread function for monitoring angle
     void eventLoop();
 
-    // Thread starten
+    // start thread
     bool startThread();
-
-    // Thread stoppen
     void stopThread();
     
     void getEvent();
 	
     void processEvent();
-    void outputEdge(const EdgeLine& e); // zum Debuggen
+    void outputEdge(const EdgeLine& e); // for debugging
 
 public:
     // Konstruktor
@@ -64,10 +61,10 @@ public:
     // Destruktor
     ~Encoder();
 
-    // Liefert den aktuellen Winkel in Grad zurück
+    // give current angle in edge count
     int getAngle();
     void calculateAngleVelocity();
-    int getAngleVelocity();
+    int getAngleVelocity(); // give angle velocity in edges per second
 };
 
 #endif // ENCODER_H
