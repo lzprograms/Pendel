@@ -91,10 +91,6 @@
                         maxDecelerate(curTask.arg);
                         if(curSpeed == curTask.arg)tasks.pop();
                         break;
-                    case MotorState::FINISHHOME:
-                        isHoming = false;
-                        tasks.pop();
-                        break;
                     default:
                         break;
                 }
@@ -110,6 +106,7 @@
                 {
                     curStep = curStep == 1? 0: 1;         // set value of gpio-pin (0/1 -> low/high)
                     pos += direction * curStep; // count total number of steps  
+                    checkLimits(); // limit switch triggered?
                     std::this_thread::sleep_until(next);
                     gpiod_line_set_value(step_line, curStep);
                 }
@@ -118,6 +115,39 @@
         
         void Axis::clearQueue(){
             tasks.clear();
+        }
+        
+        void Axis::checkLimits(){
+            int currentRightLimitValue = gpiod_line_get_value(right_limit_line);
+            int currentLeftLimitValue = gpiod_line_get_value(left_limit_line);
+            if (currentRightLimitValue < 0) { // value below 0 is error
+                std::cerr << "Fehler: konnte Endschalter-Line nicht lesen\n";
+                return;
+            }
+            if(currentRightLimitValue != lastRightLimitValue && isHoming) { 
+                // once right limit switch is found, go find left limit switch
+                setSpeed(2000);
+            }
+            if (currentRightLimitValue != lastRightLimitValue) { // limit triggered
+                pos = 250;
+                lastRightLimitValue = currentRightLimitValue;
+            }
+            if(pos < 250 && currentRightLimitValue != 0){ // if should be at limit but switch is not triggered
+                pos = 250; // reset position
+            }
+            
+            
+            if(pos > (endPos-250) && currentLeftLimitValue != 0 && !isHoming){ // if should be at limit but switch is not triggered
+                pos = (endPos - 250); // reset position
+            }
+            if(currentLeftLimitValue == 0 && lastLeftLimitValue == 1 && isHoming) { 
+                isHoming = false;
+                endPos = pos + 250;
+                setSpeed(0);
+            }
+            if(currentLeftLimitValue != lastLeftLimitValue){
+                lastLeftLimitValue = currentLeftLimitValue;
+            }
         }
         
         int Axis::getDecelDistance(){
@@ -161,13 +191,14 @@
             accelerate(a);
         }
         
-        void Axis::stopOnLimit(){
-            if(isHoming)return;
+        void Axis::stopOnLimit(){ // stop in time
+            //if(isHoming)return; // ignore previous limits if homing
             int dd = getDecelDistance();
             if(curSpeed == 0) return; 
             if((pos + dd > endPos && curSpeed < 0 )||( pos - dd < 0      && curSpeed > 0)){
                 clearQueue();
                 stopAndReverse(direction);
+                isHoming = false; // homing completed
             }
         }
         
@@ -240,10 +271,10 @@
         
       Axis::Axis(gpiod_chip* chip, unsigned int pinStep,
             unsigned int pinDir, unsigned int pinEn,
-            unsigned int pinEndschalter, unsigned int pinMs1,
-            unsigned int pinMs2, int endPosP){
+            unsigned int pinRightLimit, unsigned int pinLeftLimit,
+            unsigned int pinMs1, unsigned int pinMs2){
                
-         endPos = endPosP;
+         endPos = 10000;
          
          pos = endPos;
          curSpeed = 0;
@@ -253,19 +284,29 @@
          step_line = gpiod_chip_get_line(chip, pinStep);
          dir_line  = gpiod_chip_get_line(chip, pinDir);
          en_line   = gpiod_chip_get_line(chip, pinEn);
-         endschalter_line = gpiod_chip_get_line(chip, pinEndschalter);
+         right_limit_line = gpiod_chip_get_line(chip, pinRightLimit);
+         left_limit_line = gpiod_chip_get_line(chip, pinLeftLimit);
          
          ms1_line  = gpiod_chip_get_line(chip, pinMs1);
          ms2_line   = gpiod_chip_get_line(chip, pinMs2);
+         
+         if (gpiod_line_request_both_edges_events(right_limit_line, "home") < 0) 
+        {
+            std::cerr << "Fehler: konnte Events nicht anfordern(Home)\n";
+        }
+        if (gpiod_line_request_both_edges_events(left_limit_line, "home") < 0) 
+        {
+            std::cerr << "Fehler: konnte Events nicht anfordern(Home)\n";
+        }
+         
+         home();
          startThread();
-         if (!home()) {
-            throw std::runtime_error("Konnte Schlitten nicht zurücksetzen");
-         }
       }
       
       Axis::~Axis() {
         stopThread();
-        if (endschalter_line)   gpiod_line_release(endschalter_line);
+        if (right_limit_line)   gpiod_line_release(right_limit_line);
+        if (left_limit_line)   gpiod_line_release(left_limit_line);
       }
       
       
@@ -275,33 +316,26 @@
                 std::cerr << "Fehler: konnte Motor-GPIO-Lines nicht abrufen\n";
                 return false;
             }
-            //GPIO-Pins reservieren
+            //reserve GPIO-Pins
             gpiod_line_request_output(step_line, "step_motor", 0);
             gpiod_line_request_output(dir_line,  "step_motor", 0);
             gpiod_line_request_output(en_line,   "step_motor", 0);
             gpiod_line_request_output(ms1_line,  "step_motor", 0);
             gpiod_line_request_output(ms2_line,   "step_motor", 0);
             
-            gpiod_line_set_value(en_line, 0); // Motor aktivieren
+            gpiod_line_set_value(en_line, 0); // turn motor on, 0 = ON, 1 = OFF
             
             gpiod_line_set_value(ms1_line, 1); 
             gpiod_line_set_value(ms2_line, 1); 
-            // Microstep auf 8tel Schritte einstellen
+            // Set microstep mode to 1/8
             
-            if (gpiod_line_request_both_edges_events(endschalter_line, "home") < 0) 
-                {
-                std::cerr << "Fehler: konnte Events nicht anfordern\n";
-                return false;
-            }
-            
-            
-            running = true;
+            running = true; // thread is started
             thread = std::thread(&Axis::eventLoop, this);
-            return true; //Thread konnte ohne Fehler gestarten werden
+            return true; //thread was started with no error
         }
         
         void Axis::stopThread(){
-            gpiod_line_set_value(en_line, 1); // Motor deaktivieren
+            gpiod_line_set_value(en_line, 1); // turn motor off
             running = false;
             if (thread.joinable()) thread.join();
             if (step_line) gpiod_line_release(step_line);
@@ -313,34 +347,23 @@
         
         
         bool Axis::home(){ // Schlittenposition ermitteln
-              // Vorab prüfen: Schlitten schon am Endschalter?
-            int val = gpiod_line_get_value(endschalter_line);
-            if (val < 0) {
-                std::cerr << "Fehler: konnte Line nicht lesen\n";
+            isHoming = true;
+            int currentRightLimitValue = gpiod_line_get_value(right_limit_line);
+            int currentLeftLimitValue = gpiod_line_get_value(left_limit_line);
+            if (currentRightLimitValue < 0) { // value below 0 is error
+                std::cerr << "Fehler: konnte Endschalter-Line nicht lesen\n";
                 return false;
             }
-            isHoming = true;
             
-            if (val != 0) { // Endschalter nicht schon gedrückt (LOW = aktiv)
-                struct timespec timeout;
-                timeout.tv_sec = 5;    // Timeout wie lange auf Endschaltrer gewartet wird in Sekunden
-                setSpeed(-3000);
-                
-                int ret = gpiod_line_event_wait(endschalter_line, &timeout); 
-                gpiod_line_event event; 
-                
-                // ret = -1 Fehler beim Warten auf Flanken (z.B. Line freigegeben)
-                if (ret <= 0){ // ret = 0 timeout/Zeit abgelaufen -> Endschalter kaputt oder Schlitten steckt fest  
-                    setSpeed(0);
-                    return false;
-                }             
-                gpiod_line_event_read(endschalter_line, &event);
-            }    
-            pos = -200; // end limit switch is 100 steps next to usable area
-            setPos(static_cast<int>(endPos * 0.5)); // Schlitten in der Mitte positionieren
-            MotorTask homeTask;
-            homeTask.state = MotorState::FINISHHOME;
-            tasks.push(homeTask);
+            if(currentRightLimitValue == 0){ // already at limit?
+                pos = -500;
+                setSpeed(2000); // untrigger limit switch by going forward
+            }else{
+                pos = endPos*1.2;
+                setSpeed(-2000); // trigger limit switch by going backwards
+            }
+            lastRightLimitValue = currentRightLimitValue;
+            lastLeftLimitValue = currentLeftLimitValue;
             return true;
         }
         
